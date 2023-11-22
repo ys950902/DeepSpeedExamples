@@ -7,8 +7,8 @@
 
 ACTOR_ZERO_STAGE="--actor_zero_stage 2"
 CRITIC_ZERO_STAGE="--critic_zero_stage 2"
-ACTOR_MODEL_PATH= # Provide the ckpt path of the actor model
-CRITIC_MODEL_PATH= # Provide the ckpt path of the critic model
+ACTOR_MODEL_PATH= "/home/yisheng/DeepSpeed-Chat/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step1_supervised_finetuning/output"
+CRITIC_MODEL_PATH= "/home/yisheng/DeepSpeed-Chat/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step2_reward_model_finetuning/output"
 
 OUTPUT="./output"
 
@@ -18,12 +18,25 @@ Actor_Lr=9.65e-6
 Critic_Lr=5e-6
 
 mkdir -p $OUTPUT
+# Hostfile path
+hostfile_deepspeed=/home/yisheng/DeepSpeed-Chat/DeepSpeedExamples/applications/DeepSpeed-Chat/training/hostfile/hostfile_deepspeed
+hostfile_mpich=/home/yisheng/DeepSpeed-Chat/DeepSpeedExamples/applications/DeepSpeed-Chat/training/hostfile/hostfile_mpich
 
-deepspeed --master_port 12346 main.py \
-   --data_path Dahoas/rm-static \
+# launcher setting
+LAUNCHER=${LAUNCHER:-MPICH}
+if [[ $LAUNCHER == "deepspeed" ]]; then
+        launcher=""
+else
+        launcher="--force_multi --hostfile $hostfile_deepspeed --launcher=${LAUNCHER} --launcher_args='-hostfile ${hostfile_mpich}'"
+fi
+
+CCL=${CCL:-ccl}
+run_cmd="
+deepspeed $launcher main.py \
+   --data_path "/home/yisheng/DeepSpeed-Chat/DeepSpeedExamples/applications/DeepSpeed-Chat/training/dataset/Dahoas/rm-static" \
    --data_split 2,4,4 \
-   --actor_model_name_or_path $ACTOR_MODEL_PATH \
-   --critic_model_name_or_path $CRITIC_MODEL_PATH \
+   --actor_model_name_or_path "/home/yisheng/DeepSpeed-Chat/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step1_supervised_finetuning/output" \
+   --critic_model_name_or_path "/home/yisheng/DeepSpeed-Chat/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step2_reward_model_finetuning/output" \
    --num_padding_at_beginning 1 \
    --per_device_generation_batch_size 4 \
    --per_device_training_batch_size 4 \
@@ -45,4 +58,15 @@ deepspeed --master_port 12346 main.py \
    --enable_hybrid_engine \
    --actor_lora_module_name decoder.layers. \
    --output_dir $OUTPUT \
-    &> $OUTPUT/training.log
+   2>&1 | tee ./$OUTPUT_PATH/training.log
+"
+startTime=`date +%Y%m%d-%H:%M:%S`
+startTime_s=`date +%s`
+echo ${run_cmd}
+eval ${run_cmd}
+set +x
+
+endTime=`date +%Y%m%d-%H:%M:%S`
+endTime_s=`date +%s`
+sumTime=$[ $endTime_s - $startTime_s ]
+echo "$startTime ---> $endTime" "Total:$sumTime seconds"

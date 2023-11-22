@@ -33,8 +33,22 @@ Num_Padding_at_Beginning=1 # this is model related
 Actor_Lr=9.65e-6
 Critic_Lr=5e-6
 
-deepspeed --master_port 12346 main.py \
-   --data_path Dahoas/rm-static \
+# Hostfile path
+hostfile_deepspeed=/home/yisheng/DeepSpeed-Chat/DeepSpeedExamples/applications/DeepSpeed-Chat/training/hostfile/hostfile_deepspeed
+hostfile_mpich=/home/yisheng/DeepSpeed-Chat/DeepSpeedExamples/applications/DeepSpeed-Chat/training/hostfile/hostfile_mpich
+
+# launcher setting
+LAUNCHER=${LAUNCHER:-MPICH}
+if [[ $LAUNCHER == "deepspeed" ]]; then
+        launcher=""
+else
+        launcher="--force_multi --hostfile $hostfile_deepspeed --launcher=${LAUNCHER} --launcher_args='-hostfile ${hostfile_mpich}'"
+fi
+
+CCL=${CCL:-ccl}
+run_cmd="
+deepspeed $launcher main.py \
+   --data_path "/home/yisheng/DeepSpeed-Chat/DeepSpeedExamples/applications/DeepSpeed-Chat/training/dataset/Dahoas/rm-static" \
    --data_split 2,4,4 \
    --actor_model_name_or_path $ACTOR_MODEL_PATH \
    --critic_model_name_or_path $CRITIC_MODEL_PATH \
@@ -60,4 +74,15 @@ deepspeed --master_port 12346 main.py \
    --output_dir $OUTPUT \
    --enable_tensorboard \
    --tensorboard_path $OUTPUT \
-    &> $OUTPUT/training.log
+   2>&1 | tee $OUTPUT_PATH/training.log
+"
+startTime=`date +%Y%m%d-%H:%M:%S`
+startTime_s=`date +%s`
+echo ${run_cmd}
+eval ${run_cmd}
+set +x
+
+endTime=`date +%Y%m%d-%H:%M:%S`
+endTime_s=`date +%s`
+sumTime=$[ $endTime_s - $startTime_s ]
+echo "$startTime ---> $endTime" "Total:$sumTime seconds"

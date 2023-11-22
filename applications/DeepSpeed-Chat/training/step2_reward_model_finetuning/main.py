@@ -211,6 +211,8 @@ def parse_args():
 def main():
     args = parse_args()
 
+    import os
+    args.local_rank = int(os.getenv("RANK"))
     if args.local_rank == -1:
         device = torch.device(get_accelerator().device_name())
     else:
